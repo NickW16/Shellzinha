@@ -17,10 +17,24 @@ int run_command(char **argv) {
 	char *out_file = NULL;
 	char *err_file = NULL;
 	int out_append = 0; // for >>
+	
+	// pipes
+	char **cmds[MAX_PIPES];
+	int ncmds = 0;
+	char **start = argv;
 
 	// scan for redirect
 	for (int i = 0; argv[i] != NULL; i++) {
-		if (strcmp(argv[i], "2>") == 0) {
+		if (ncmds >= MAX_PIPES) {
+			fprintf(stderr, "too many commands in pipeline\n");
+			return -1;
+		}
+
+		if (strcmp(argv[i], "|") == 0)  {
+			argv[i] = NULL;
+			cmds[ncmds++] = start;
+			start = &argv[i + 1];
+		} else if (strcmp(argv[i], "2>") == 0) {
 			if (argv[i + 1] == NULL) {
 				perror("found redirect with no filename");
 				return -1;
@@ -54,6 +68,23 @@ int run_command(char **argv) {
 			argv[i] = NULL;
 		}
 	}
+
+	cmds[ncmds++] = start;
+
+	if (ncmds > 1) {
+		return run_pipeline(cmds, ncmds);
+	}
+
+	// parse testing:
+	//	for (int c = 0; c < ncmds; c++) {
+	//		printf("cmd%d", c);
+	//		for (int j = 0; cmds[c][j] != NULL; j++) {
+	//			printf(" %s", cmds[c][j]);
+	//		}
+	//		printf("\n");
+	//	}
+	//	return 0;
+
 
 	// fork for command exec
 	pid_t pid = fork();
@@ -102,6 +133,60 @@ int run_command(char **argv) {
 	if (waitpid(pid, &status, 0) < 0) {
 		perror("waitpid");
 		return -1;
+	}
+
+	if (WIFEXITED(status)) return WEXITSTATUS(status);
+	if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+	return -1;
+}
+
+int run_pipeline(char ***cmds, int ncmds) {
+	// create ncmds
+	int pipes[MAX_PIPES - 1][2];
+	for (int i = 0; i < ncmds - 1; i++) {
+		if (pipe(pipes[i]) < 0) { 
+			perror("pipe");
+			return -1; 
+		}
+	}
+
+	// fork commands
+	pid_t pids[MAX_PIPES];
+	for (int i = 0; i < ncmds; i++) {
+		pids[i] = fork();
+		if (pids[i] < 0) { 
+			perror("fork");
+			return -1;
+		}
+
+		if (pids[i] == 0) {
+			if (i > 0) {
+				dup2(pipes[i-1][0], STDIN_FILENO);
+			}
+			if (i < ncmds - 1) {
+				dup2(pipes[i][1], STDOUT_FILENO);
+			}
+
+			// close all pipes fds
+			for (int k = 0; k < ncmds - 1; k++) {
+				close(pipes[k][0]);
+				close(pipes[k][1]);
+			}
+
+			execvp(cmds[i][0], cmds[i]); // execute
+			perror("execvp");
+			_exit(127);
+		}
+	}
+
+	for (int i = 0; i < ncmds - 1; i++) {
+		close(pipes[i][0]);
+		close(pipes[i][1]);
+	}
+
+	int status;
+	for (int i = 0; i < ncmds; i++) {
+		waitpid(pids[i], &status, 0);
 	}
 
 	if (WIFEXITED(status)) return WEXITSTATUS(status);
