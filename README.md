@@ -25,3 +25,7 @@ emerge sys-libs/readline
 # Build
 make
 ./shellzinha
+
+```
+## LICENSE
+MIT
