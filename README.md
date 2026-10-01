@@ -19,7 +19,8 @@ Requires a POSIX system and GNU's Readline Library (generally included in most d
 # Debian/Ubuntu
 sudo apt install libreadline-dev
 
-# Gentoo emerge sys-libs/readline
+# Gentoo 
+emerge sys-libs/readline
 
 # Build
 make
