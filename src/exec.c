@@ -15,7 +15,7 @@ void init_terminal(void) {
 
 	struct sigaction action;
 	action.sa_handler = SIG_IGN;
-	sigemptyset(&sa.sa_mask);
+	sigemptyset(&action.sa_mask);
 	action.sa_flags = 0;
 
 	sigaction(SIGINT, &action, NULL);
@@ -146,16 +146,35 @@ int run_command(char **argv) {
 				close(fd);
 			}
 		}
+
+		setpgid(0, 0);
+		
+		struct sigaction sa;
+		sa.sa_handler = SIG_DFL;
+		sigemptyset(&sa.sa_mask);
+		sa.sa_flags = 0;
+		sigaction(SIGINT, &sa, NULL);
+		sigaction(SIGTSTP, &sa, NULL);
+		sigaction(SIGTTOU, &sa, NULL);
+
+		tcsetattr(STDIN_FILENO, TCSADRAIN, &shell_termios);
+
 		execvp(argv[0], argv);
 		perror("execvp");
 		_exit(127);
 	}
+
+	// terminal ownership
+	setpgid(pid, pid);
+	tcsetpgrp(STDIN_FILENO, pid);	
 
 	int status;
 	if (waitpid(pid, &status, 0) < 0) {
 		perror("waitpid");
 		return -1;
 	}
+	
+	tcsetpgrp(STDIN_FILENO, getpid()); // take back group
 
 	if (WIFEXITED(status)) return WEXITSTATUS(status);
 	if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
