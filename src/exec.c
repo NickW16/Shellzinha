@@ -4,6 +4,28 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <signal.h>
+#include <termios.h>
+
+static struct termios shell_termios;
+
+// handles startup
+void init_terminal(void) {
+	tcgetattr(STDIN_FILENO, &shell_termios);
+
+	struct sigaction action;
+	action.sa_handler = SIG_IGN;
+	sigemptyset(&sa.sa_mask);
+	action.sa_flags = 0;
+
+	sigaction(SIGINT, &action, NULL);
+	sigaction(SIGTSTP, &action, NULL);
+	sigaction(SIGTTOU, &action, NULL);
+
+	setpgid(0, 0);
+
+	tcsetpgrp(STDIN_FILENO, getpid());
+}
 
 int run_command(char **argv) {
 	// legacy

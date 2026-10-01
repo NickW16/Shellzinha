@@ -8,6 +8,8 @@
 #include "shell.h"
 
 int main(void) {
+	init_terminal();
+
 	//char line[MAX_LINE]; // buffer for typing
 	// readlinecode
 	char *argv[MAX_ARGS + 1]; // array of word pointers
